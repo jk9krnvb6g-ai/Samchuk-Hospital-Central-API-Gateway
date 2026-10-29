@@ -1,0 +1,6 @@
+{
+  "name": "Samchuk Hospital Central API Gateway",
+  "description": "ระบบ Central API Gateway สำหรับโรงพยาบาลสามชุก จัดการและรวมศูนย์ Backend Router สำหรับ Procurement, Sam_Att และ Cash_Cheque บน HTTPS พอร์ต 3002 สำหรับ Windows Server และ IIS",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
