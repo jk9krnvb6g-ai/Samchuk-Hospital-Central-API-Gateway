@@ -91,6 +91,8 @@ function createApp() {
     } catch (error) { next(error); }
   });
 
+  app.use('/api/gateway/admin', require('./routes/gateway-admin'));
+
   // 8. ติดตั้งและ Mount Subsystem Routers ตามลำดับ
   // /api/Procurement  -> Procurement Router
   // /api/Sam_Att      -> Sam_Att Router
