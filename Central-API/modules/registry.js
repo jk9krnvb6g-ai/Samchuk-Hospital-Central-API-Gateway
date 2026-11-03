@@ -1,206 +1,214 @@
 /**
- * @file modules/registry.js
- * Central Module Registry & Dynamic Subsystem Loader
- * จัดการและลงทะเบียน Backend Router ของแต่ละระบบโรงพยาบาลสามชุกเข้ากับ Gateway
+ * Gateway v2 - in-process module registry (phase 1).
+ * No new HTTP listeners. Runtime controls are intentionally internal until
+ * authenticated management endpoints and audit logging are implemented.
  */
-
 const fs = require('fs');
 const path = require('path');
+const express = require('express');
 const { validateSubsystemModule, createUnconfiguredRouter } = require('./adapter-interface');
 const modulesConfig = require('../config/modules');
 
-const express = require('express');
+const STATES = Object.freeze({
+  INITIALIZING: 'INITIALIZING',
+  ACTIVE: 'ACTIVE',
+  DISABLED: 'DISABLED',
+  DRAINING: 'DRAINING',
+  NOT_CONFIGURED: 'NOT_CONFIGURED',
+  LOAD_ERROR: 'LOAD_ERROR'
+});
 
 class ModuleRegistry {
   constructor() {
     this.modules = new Map();
-    this.router = express.Router();
     this.isInitialized = false;
+    this.isMounted = false;
   }
 
-  /**
-   * เริ่มต้นโหลดระบบทั้งหมดตามการตั้งค่า
-   */
   init() {
     if (this.isInitialized) return;
-
-    for (const sub of modulesConfig.registeredSubsystems) {
-      this.register(sub);
-    }
-
+    for (const definition of modulesConfig.registeredSubsystems) this.register(definition);
     this.isInitialized = true;
-    console.log(`[REGISTRY] ลงทะเบียนระบบเรียบร้อย (${this.modules.size} ระบบ)`);
   }
 
-  /**
-   * ลงทะเบียนระบบ (รองรับทั้งการลงทะเบียนอัตโนมัติ การส่ง router เข้ามาตรงๆ และการเพิ่มระบบใหม่ในอนาคต เช่น Inventory)
-   * @param {object} moduleDef ข้อมูลระบบ
-   */
-  register(moduleDef) {
-    const { id, name, prefix, enabled, externalPath, required, router: directRouter } = moduleDef;
+  register(definition) {
+    if (!definition || !definition.id || !definition.prefix) {
+      throw new Error('Module id and prefix are required');
+    }
+    if (!/^\/api\/[A-Za-z0-9_-]+$/.test(definition.prefix)) {
+      throw new Error('Invalid module prefix');
+    }
+    if (this.modules.has(definition.id)) throw new Error('Duplicate module id: ' + definition.id);
+    const prefixLower = definition.prefix.toLowerCase();
+    for (const existing of this.modules.values()) {
+      if (existing.prefix.toLowerCase() === prefixLower) {
+        throw new Error('Duplicate module prefix: ' + definition.prefix);
+      }
+    }
 
     const record = {
-      id,
-      name,
-      prefix,
-      enabled: enabled !== false,
-      required: Boolean(required),
-      externalPath: externalPath || null,
-      status: 'INITIALIZING', // INITIALIZING | ACTIVE | NOT_CONFIGURED | DISABLED | LOAD_ERROR
+      id: definition.id,
+      name: definition.name || definition.id,
+      prefix: definition.prefix,
+      enabled: definition.enabled !== false,
+      required: Boolean(definition.required),
+      externalPath: definition.externalPath || null,
+      directRouter: definition.router || null,
+      status: STATES.INITIALIZING,
       router: null,
+      healthCheck: null,
       error: null,
       loadedAt: null,
-      healthCheck: null
+      inFlight: 0,
+      drainWaiters: []
     };
-
+    this.modules.set(record.id, record);
     if (!record.enabled) {
-      record.status = 'DISABLED';
-      this.modules.set(id, record);
-      console.log(`[REGISTRY] ระบบ ${name} [${prefix}] ถูกปิดการใช้งาน (DISABLED)`);
-      return record;
+      record.status = STATES.DISABLED;
+    } else {
+      this.load(record);
     }
-
-    // กรณีที่ 1: มีการส่ง Router หรือ Adapter เข้ามาโดยตรง (Direct Router Injection)
-    if (directRouter) {
-      const validation = validateSubsystemModule(directRouter, id);
-      if (validation.isValid) {
-        record.router = validation.router;
-        record.healthCheck = validation.healthCheck;
-        record.status = 'ACTIVE';
-        record.loadedAt = new Date().toISOString();
-        console.log(`[REGISTRY SUCCESS] เชื่อมต่อ Router โดยตรงของระบบ ${name} สำเร็จที่ Prefix: ${prefix}`);
-      } else {
-        record.status = 'LOAD_ERROR';
-        record.error = validation.error;
-        record.router = createUnconfiguredRouter(record);
-      }
-      this.modules.set(id, record);
-      return record;
-    }
-
-    // กรณีที่ 2: ไม่ได้ระบุ External Path หรือไฟล์ยังไม่มีอยู่จริง
-    if (!record.externalPath || !fs.existsSync(path.resolve(record.externalPath))) {
-      record.status = 'NOT_CONFIGURED';
-      record.router = createUnconfiguredRouter(record);
-      
-      if (record.required) {
-        console.warn(`[REGISTRY WARNING] ระบบหลักจำเป็น '${name}' (${prefix}) ยังไม่ได้ระบุไฟล์ Source Code จริงที่: ${record.externalPath || 'ไม่ระบุ'}`);
-      } else {
-        console.log(`[REGISTRY INFO] ระบบ ${name} (${prefix}) ใช้ Adapter Interface (สถานะ NOT_CONFIGURED)`);
-      }
-
-      this.modules.set(id, record);
-      return record;
-    }
-
-    // กรณีที่ 3: โหลด Module จาก External Path ภายนอก
-    try {
-      const resolvedPath = path.resolve(record.externalPath);
-      // เคลียร์ require cache เพื่อรองรับ hot reload หากจำเป็น
-      delete require.cache[resolvedPath];
-      const loaded = require(resolvedPath);
-
-      const validation = validateSubsystemModule(loaded, id);
-      if (!validation.isValid) {
-        throw new Error(validation.error);
-      }
-
-      record.router = validation.router;
-      record.healthCheck = validation.healthCheck;
-      record.status = 'ACTIVE';
-      record.loadedAt = new Date().toISOString();
-      console.log(`[REGISTRY SUCCESS] เชื่อมต่อระบบ ${name} สำเร็จที่ Prefix: ${prefix} จาก: ${resolvedPath}`);
-    } catch (err) {
-      record.status = 'LOAD_ERROR';
-      record.error = err.message;
-      record.router = createUnconfiguredRouter(record);
-
-      console.error(`[REGISTRY ERROR] ไม่สามารถโหลด Module '${name}' จาก ${record.externalPath}:`, err.message);
-
-      if (record.required) {
-        console.error(`[CRITICAL ALERT] ระบบที่จำเป็น '${name}' โหลดล้มเหลว! กรุณาตรวจสอบ Source Code และ Node.js Dependencies ของระบบดังกล่าว`);
-      }
-    }
-
-    this.modules.set(id, record);
     return record;
   }
 
-  /**
-   * นำ Router ทั้งหมดที่ลงทะเบียนไว้ไป Mount เข้ากับ Express Application
-   * @param {import('express').Application} app 
-   */
-  mountAll(app) {
-    if (!this.isInitialized) {
-      this.init();
+  load(record) {
+    record.error = null;
+    record.router = null;
+    record.healthCheck = null;
+    try {
+      let candidate = record.directRouter;
+      if (!candidate) {
+        if (!record.externalPath || !fs.existsSync(path.resolve(record.externalPath))) {
+          record.status = STATES.NOT_CONFIGURED;
+          record.router = createUnconfiguredRouter(record);
+          return;
+        }
+        // Initial load only: do not attempt to hot-reload a dependency tree here.
+        candidate = require(path.resolve(record.externalPath));
+      }
+      const result = validateSubsystemModule(candidate, record.id);
+      if (!result.isValid) throw new Error(result.error);
+      record.router = result.router;
+      record.healthCheck = typeof result.healthCheck === 'function' ? result.healthCheck : null;
+      record.loadedAt = new Date().toISOString();
+      record.status = STATES.ACTIVE;
+    } catch (error) {
+      record.status = STATES.LOAD_ERROR;
+      record.error = error.message;
+      record.router = createUnconfiguredRouter(record);
     }
+  }
 
-    // ติดตั้ง dynamic dispatch router เข้ากับ app
-    // ให้ตรวจสอบ route แบบ dynamic ทุกครั้ง ทำให้รองรับการลงทะเบียน module ใหม่ระหว่างรันไทม์ได้ทันที
+  // Used only by a future authenticated management API.
+  start(id) {
+    const record = this.modules.get(id);
+    if (!record) throw new Error('Unknown module');
+    if (record.status === STATES.DRAINING) throw new Error('Module is draining');
+    if (record.status === STATES.ACTIVE) return this.publicRecord(record);
+    if (record.inFlight !== 0) throw new Error('Module still has active requests');
+    record.enabled = true;
+    this.load(record);
+    return this.publicRecord(record);
+  }
+
+  async stop(id, { timeoutMs = 30000 } = {}) {
+    const record = this.modules.get(id);
+    if (!record) throw new Error('Unknown module');
+    if (record.status === STATES.DISABLED) return this.publicRecord(record);
+    if (record.status === STATES.DRAINING) throw new Error('Module is already draining');
+    record.status = STATES.DRAINING;
+    // Existing requests may finish. Do not forcibly destroy their sockets.
+    if (record.inFlight > 0) {
+      let timer;
+      const completed = await Promise.race([
+        new Promise(resolve => record.drainWaiters.push(resolve)),
+        new Promise(resolve => { timer = setTimeout(() => resolve(false), timeoutMs); })
+      ]);
+      clearTimeout(timer);
+      if (completed === false && record.inFlight > 0) {
+        // Remain in DRAINING to avoid falsely claiming shutdown.
+        throw new Error('Module drain timed out; module remains DRAINING');
+      }
+    }
+    record.enabled = false;
+    record.status = STATES.DISABLED;
+    // Router remains in memory. Cleanup hooks and safe code reload come in phase 2.
+    return this.publicRecord(record);
+  }
+
+  mountAll(app) {
+    if (this.isMounted) throw new Error('Registry already mounted');
+    this.init();
+    this.isMounted = true;
     app.use((req, res, next) => {
+      const pathname = (req.path || req.url.split('?')[0]);
       for (const record of this.modules.values()) {
-        if (record.status !== 'DISABLED' && record.router) {
-          if (req.originalUrl.startsWith(record.prefix)) {
-            // ตัด prefix ออกเพื่อให้ sub-router ประมวลผลได้อย่างถูกต้อง
-            const originalUrl = req.url;
-            const originalBaseUrl = req.baseUrl;
-            req.baseUrl = record.prefix;
-            req.url = req.originalUrl.slice(record.prefix.length) || '/';
+        // Match a complete segment, not /api/ProcurementXYZ.
+        if (pathname !== record.prefix && !pathname.startsWith(record.prefix + '/')) continue;
+        if (record.status === STATES.DISABLED || record.status === STATES.DRAINING) {
+          return res.status(503).json({ success: false, error: { code: 'MODULE_UNAVAILABLE', systemId: record.id } });
+        }
+        if (!record.router) return res.status(503).json({ success: false, error: { code: 'MODULE_UNAVAILABLE', systemId: record.id } });
 
-            return record.router(req, res, (err) => {
-              // คืนค่า url เดิมหากโมดูลไม่ได้จัดการ request
-              req.url = originalUrl;
-              req.baseUrl = originalBaseUrl;
-              next(err);
-            });
+        const previousUrl = req.url;
+        const previousBaseUrl = req.baseUrl;
+        req.baseUrl = previousBaseUrl + record.prefix;
+        req.url = req.url.slice(record.prefix.length) || '/';
+        if (req.url.startsWith('?')) req.url = '/' + req.url;
+        record.inFlight++;
+        let released = false;
+        const release = () => {
+          if (released) return;
+          released = true;
+          record.inFlight--;
+          if (record.inFlight === 0) {
+            for (const resolve of record.drainWaiters.splice(0)) resolve(true);
           }
+        };
+        res.once('finish', release);
+        res.once('close', release);
+        try {
+          return record.router(req, res, err => {
+            release();
+            req.url = previousUrl;
+            req.baseUrl = previousBaseUrl;
+            next(err);
+          });
+        } catch (err) {
+          release();
+          req.url = previousUrl;
+          req.baseUrl = previousBaseUrl;
+          return next(err);
         }
       }
       next();
     });
-
-    for (const [id, record] of this.modules.entries()) {
-      console.log(`[MOUNT] ติดตั้ง Route: ${record.prefix} -> [${id}] Status: ${record.status}`);
-    }
   }
 
-  /**
-   * สรุปสถานะความพร้อมของแต่ละโมดูลสำหรับ Health Check
-   */
+  publicRecord(record) {
+    return {
+      name: record.name,
+      prefix: record.prefix,
+      status: record.status,
+      enabled: record.enabled,
+      required: record.required,
+      loadedAt: record.loadedAt,
+      hasSourcePath: Boolean(record.externalPath),
+      inFlight: record.inFlight
+    };
+  }
+
   getHealthSummary() {
-    const summary = {};
-    for (const [id, record] of this.modules.entries()) {
-      summary[id] = {
-        name: record.name,
-        prefix: record.prefix,
-        status: record.status,
-        enabled: record.enabled,
-        required: record.required,
-        loadedAt: record.loadedAt,
-        // ซ่อนพาธของไฟล์ใน Production เพื่อความปลอดภัย
-        hasSourcePath: Boolean(record.externalPath)
-      };
-    }
-    return summary;
+    const result = {};
+    for (const [id, record] of this.modules) result[id] = this.publicRecord(record);
+    return result;
   }
 
-  /**
-   * ค้นหาโมดูลตาม ID
-   * @param {string} id 
-   */
-  getModule(id) {
-    return this.modules.get(id);
-  }
-
-  /**
-   * รายการโมดูลทั้งหมด
-   */
-  getAll() {
-    return Array.from(this.modules.values());
-  }
+  getModule(id) { return this.modules.get(id); }
+  getAll() { return Array.from(this.modules.values()); }
 }
 
-// Singleton Instance สำหรับการใช้งานทั่วทั้ง Gateway
 const registry = new ModuleRegistry();
-
 module.exports = registry;
+module.exports.ModuleRegistry = ModuleRegistry;
+module.exports.STATES = STATES;
