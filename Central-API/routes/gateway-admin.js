@@ -5,6 +5,7 @@ const registry = require('../modules/registry');
 const { auditAdminAction } = require('../middleware/admin-audit');
 const { inspectModule } = require('../modules/health-monitor');
 const router = express.Router();
+const pendingOperations = new Set();
 
 router.use((req, res, next) => {
   const expected = process.env.GATEWAY_ADMIN_TOKEN || '';
@@ -36,6 +37,16 @@ router.post('/modules/:id/:action', async (req, res) => {
   if (process.env.GATEWAY_ADMIN_MUTATIONS_ENABLED !== 'true') {
     return res.status(403).json({ error: 'MUTATIONS_DISABLED' });
   }
+  if (pendingOperations.has(id)) return res.status(409).json({ error: 'MODULE_OPERATION_IN_PROGRESS' });
+  pendingOperations.add(id);
+  try {
+    return await executeModuleOperation(req, res, { id, action });
+  } finally {
+    pendingOperations.delete(id);
+  }
+});
+
+async function executeModuleOperation(req, res, { id, action }) {
   const event = { action, moduleId: id, requestId: req.id };
   try {
     auditAdminAction({ ...event, outcome: 'REQUESTED' });
@@ -60,6 +71,6 @@ router.post('/modules/:id/:action', async (req, res) => {
     });
   }
   return res.json({ module });
-});
+}
 
 module.exports = router;
