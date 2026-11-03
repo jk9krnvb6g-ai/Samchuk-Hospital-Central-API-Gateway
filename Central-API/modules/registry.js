@@ -8,6 +8,7 @@ const path = require('path');
 const express = require('express');
 const { validateSubsystemModule, createUnconfiguredRouter } = require('./adapter-interface');
 const modulesConfig = require('../config/modules');
+const { normalizeHealth } = require('./health-monitor');
 
 const STATES = Object.freeze({
   INITIALIZING: 'INITIALIZING',
@@ -60,7 +61,10 @@ class ModuleRegistry {
       error: null,
       loadedAt: null,
       inFlight: 0,
-      drainWaiters: []
+      drainWaiters: [],
+      previousVersion: null,
+      version: 1,
+      operationBusy: false
     };
     this.modules.set(record.id, record);
     if (!record.enabled) {
@@ -104,6 +108,7 @@ class ModuleRegistry {
     const record = this.modules.get(id);
     if (!record) throw new Error('Unknown module');
     if (record.status === STATES.DRAINING) throw new Error('Module is draining');
+    if (record.operationBusy) throw new Error('Module operation in progress');
     if (record.status === STATES.ACTIVE) return this.publicRecord(record);
     if (record.inFlight !== 0) throw new Error('Module still has active requests');
     record.enabled = true;
@@ -114,9 +119,12 @@ class ModuleRegistry {
   async stop(id, { timeoutMs = 30000 } = {}) {
     const record = this.modules.get(id);
     if (!record) throw new Error('Unknown module');
+    if (record.operationBusy) throw new Error('Module operation in progress');
     if (record.status === STATES.DISABLED) return this.publicRecord(record);
     if (record.status === STATES.DRAINING) throw new Error('Module is already draining');
     record.status = STATES.DRAINING;
+    record.operationBusy = true;
+    try {
     // Existing requests may finish. Do not forcibly destroy their sockets.
     if (record.inFlight > 0) {
       let timer;
@@ -134,7 +142,63 @@ class ModuleRegistry {
     }
     record.enabled = false;
     record.status = STATES.DISABLED;
-    // Router remains in memory. Cleanup hooks and safe code reload come in phase 2.
+    return this.publicRecord(record);
+    } finally {
+      record.operationBusy = false;
+    }
+  }
+
+  recoverDrain(id) {
+    const record = this.modules.get(id);
+    if (!record) throw new Error('Unknown module');
+    if (record.operationBusy) throw new Error('Module operation in progress');
+    if (record.status !== STATES.DRAINING) throw new Error('Module is not draining');
+    record.status = record.router ? STATES.ACTIVE : STATES.LOAD_ERROR;
+    record.enabled = true;
+    return this.publicRecord(record);
+  }
+
+  async safeReload(id, candidate, { timeoutMs = 1500 } = {}) {
+    const record = this.modules.get(id);
+    if (!record) throw new Error('Unknown module');
+    if (record.required || id === 'procurement') throw new Error('Protected module');
+    if (record.operationBusy || record.status !== STATES.ACTIVE) throw new Error('Module not ready for reload');
+    record.operationBusy = true;
+    try {
+      const checked = validateSubsystemModule(candidate, id);
+      if (!checked.isValid) throw new Error('Invalid candidate router');
+      if (typeof checked.healthCheck !== 'function') throw new Error('Candidate health check required');
+      if (!Number.isFinite(timeoutMs) || timeoutMs < 1 || timeoutMs > 30000) throw new Error('Invalid timeout');
+      let timer;
+      let result;
+      try {
+        result = await Promise.race([
+          Promise.resolve().then(() => checked.healthCheck()),
+          new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Health check timeout')), timeoutMs); })
+        ]);
+      } finally { clearTimeout(timer); }
+      if (normalizeHealth(result) !== 'HEALTHY') throw new Error('Candidate not healthy');
+      record.previousVersion = { router: record.router, healthCheck: record.healthCheck, version: record.version, loadedAt: record.loadedAt };
+      record.router = checked.router;
+      record.healthCheck = checked.healthCheck;
+      record.version++;
+      record.loadedAt = new Date().toISOString();
+      return this.publicRecord(record);
+    } finally { record.operationBusy = false; }
+  }
+
+  rollback(id) {
+    const record = this.modules.get(id);
+    if (!record) throw new Error('Unknown module');
+    if (record.required || id === 'procurement') throw new Error('Protected module');
+    if (record.operationBusy || record.status !== STATES.ACTIVE) throw new Error('Module not ready for rollback');
+    if (!record.previousVersion) throw new Error('No rollback version');
+    const previous = record.previousVersion;
+    record.previousVersion = null;
+    record.router = previous.router;
+    record.healthCheck = previous.healthCheck;
+    record.version = previous.version;
+    record.loadedAt = previous.loadedAt;
     return this.publicRecord(record);
   }
 
@@ -196,7 +260,9 @@ class ModuleRegistry {
       required: record.required,
       loadedAt: record.loadedAt,
       hasSourcePath: Boolean(record.externalPath),
-      inFlight: record.inFlight
+      inFlight: record.inFlight,
+      version: record.version,
+      rollbackAvailable: Boolean(record.previousVersion)
     };
   }
 
