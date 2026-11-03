@@ -51,7 +51,7 @@ function createApp() {
     const modulesStatus = registry.getHealthSummary();
     const isAllRequiredActive = Object.values(modulesStatus)
       .filter(m => m.required)
-      .every(m => m.status === 'ACTIVE' || m.status === 'NOT_CONFIGURED'); // ในระยะเริ่มต้น NOT_CONFIGURED ถือเป็น safe state
+      .every(m => m.status === 'ACTIVE'); // Required modules must be loaded, not merely configured
 
     res.status(isAllRequiredActive ? 200 : 503).json({
       status: isAllRequiredActive ? 'UP' : 'DEGRADED',
@@ -81,6 +81,15 @@ function createApp() {
 
   app.get('/health', healthHandler);
   app.get('/api/health', healthHandler);
+
+  // Read-only, on-demand health checks. Do not expose internal paths or errors.
+  app.get('/api/gateway/health', async (req, res, next) => {
+    try {
+      const { inspectRegistry } = require('./modules/health-monitor');
+      const modules = await inspectRegistry(registry);
+      res.json({ gateway: 'Samchuk Hospital Central API Gateway', checkedAt: new Date().toISOString(), modules });
+    } catch (error) { next(error); }
+  });
 
   // 8. ติดตั้งและ Mount Subsystem Routers ตามลำดับ
   // /api/Procurement  -> Procurement Router
