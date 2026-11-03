@@ -1,4 +1,4 @@
-# Sam_Att scanner EXE integration boundary (pending JSON fixture)
+# Sam_Att scanner EXE integration boundary (summary JSON fixture received)
 
 The Windows ScannerSyncCli.exe is an existing, working external component.
 This Gateway branch MUST NOT rebuild, replace, rename, execute or change the EXE.
@@ -7,13 +7,21 @@ This Gateway branch MUST NOT rebuild, replace, rename, execute or change the EXE
 - The existing Sam_Att UI supports selecting scanner machine numbers and date modes
   TODAY, DATE, RANGE, MONTH and YEAR.
 - Keep the existing request template and machine selection semantics intact.
-- Do not invent or rename JSON keys. The exact EXE JSON schema is **unverified**
-  until a representative sanitized output file is provided.
+- Do not invent or rename JSON keys. The EXE **summary response** keys are now grounded in the supplied sample.
+  The per-scan/raw-record schema, command/request payload and error cases remain unverified.
 - Keep raw scanner records intact; never silently drop unknown fields, change
   timestamps, deduplicate by an invented key or write to the live database during
   compatibility verification.
 
-## Integration checklist (after sample JSON is available)
+## Confirmed EXE summary response
+- Fixture: `Central-API/tests/fixtures/scanner-exe-summary.sample.json`.
+- Top-level fields: `success`, `totalRead`, `totalNew`, `duplicates`, `unmapped`, `affectedDates`, `machines`.
+- Each machine: `machineNo`, `ip`, `read`, `new`, `duplicates`, `status`.
+- Supplied successful sample: totalRead=9917, totalNew=746, duplicates=9171, unmapped=0; machine numbers 1, 2, 3.
+- This is a **summary**, not a list of raw scan records or the EXE input template.
+- Run offline consistency test: `npm run test:scanner-summary` inside `Central-API`.
+
+## Integration checklist (remaining verification)
 1. Identify the EXE output format and its encoding, timestamp/timezone rules,
    machine identifiers, success/error shape, and empty-result behavior.
 2. Trace Sam_Att frontend sync-custom request through backend adapter and raw-scan
@@ -27,4 +35,4 @@ This Gateway branch MUST NOT rebuild, replace, rename, execute or change the EXE
 
 ## Current scope
 This is a compatibility guardrail, **not** a claim that EXE-to-JSON integration
-has been tested. No JSON fixture or Windows scanner runtime is available here.
+has been tested. A summary JSON fixture is available; no raw-record fixture, EXE input template or Windows scanner runtime is available here.
