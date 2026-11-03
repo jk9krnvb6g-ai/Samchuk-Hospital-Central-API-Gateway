@@ -6,8 +6,6 @@ const path = require('node:path');
 const config = require('../config');
 const modulesConfig = require('../config/modules');
 const { ModuleRegistry } = require('../modules/registry');
-const { sendInProcessRequest } = require('./in-process-tester');
-const express = require('express');
 
 async function main() {
   const results = [];
@@ -52,14 +50,14 @@ async function main() {
     }
   });
   const registry = new ModuleRegistry();
-  const app = express();
-  registry.mountAll(app);
-  const health = await sendInProcessRequest(app, { url: '/api/health' });
-  // Isolated registry is not attached to the global application health endpoint.
+  // Verify registry mounting without dispatching an unhandled mock HTTP request.
+  const mounted = [];
+  registry.mountAll({ use: middleware => mounted.push(middleware) });
   check('isolated-registry-no-extra-ports', () => {
     assert.equal(registry.isMounted, true);
     assert.ok(registry.getModule('procurement'));
-    assert.ok(health.status === 404 || health.status === 200);
+    assert.equal(mounted.length, 1);
+    assert.equal(typeof mounted[0], 'function');
   });
   for (const result of results) console.log(result.status + ': ' + result.name + (result.reason ? ' - ' + result.reason : ''));
   const failed = results.filter(x => x.status === 'FAIL');
