@@ -47,18 +47,18 @@ registry.mountAll(app);
 app.use((_req, res) => res.status(404).json({ code: 'UNMATCHED_PATH' }));
 async function run() {
   const cases = [
-    ['/api/Procurement/data', 401],
-    ['/api/Procurement/users', 401],
-    ['/api/Procurement/procurements', 401],
-    ['/api/ProcurementExtra/data', 404],
-    ['/api/procurement/data', 404]
+    ['GET', '/api/Procurement/data', 401],
+    ['GET', '/api/Procurement/users', 401],
+    ['POST', '/api/Procurement/procurements', 401],
+    ['GET', '/api/ProcurementExtra/data', 404],
+    ['GET', '/api/procurement/data', 404]
   ];
-  for (const [url, expected] of cases) {
-    const response = await sendInProcessRequest(app, { url });
+  for (const [method, url, expected] of cases) {
+    const response = await sendInProcessRequest(app, { method, url });
     assert.equal(response.status, expected, url);
-    console.log('PASS: ' + url + ' -> ' + expected);
+    console.log('PASS: ' + method + ' ' + url + ' -> ' + expected);
   }
-  assert.equal(registry.getModule('procurement').status, 'ACTIVE');
+  assert.equal(registry.modules.get('procurement').status, 'ACTIVE');
   assert.equal(pools, 1);
   assert.equal(connections, 0);
   assert.equal(listeners, 0);
