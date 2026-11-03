@@ -1,0 +1,39 @@
+{
+  "success": true,
+  "totalRead": 9917,
+  "totalNew": 746,
+  "duplicates": 9171,
+  "unmapped": 0,
+  "affectedDates": [
+    "2026-10-31",
+    "2026-11-01",
+    "2026-11-02",
+    "2026-11-03"
+  ],
+  "machines": [
+    {
+      "machineNo": 1,
+      "ip": "192.168.111.163",
+      "read": 4326,
+      "new": 343,
+      "duplicates": 3983,
+      "status": "OK"
+    },
+    {
+      "machineNo": 2,
+      "ip": "192.168.111.164",
+      "read": 3417,
+      "new": 252,
+      "duplicates": 3165,
+      "status": "OK"
+    },
+    {
+      "machineNo": 3,
+      "ip": "192.168.111.165",
+      "read": 2174,
+      "new": 151,
+      "duplicates": 2023,
+      "status": "OK"
+    }
+  ]
+}
