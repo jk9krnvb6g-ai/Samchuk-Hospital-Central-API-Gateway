@@ -2,9 +2,11 @@
 const assert = require('node:assert/strict');
 const express = require('express');
 const admin = require('../routes/gateway-admin');
+const registry = require('../modules/registry');
 const { sendInProcessRequest } = require('./in-process-tester');
 
 async function main() {
+  registry.init();
   const app = express();
   app.use('/api/gateway/admin', admin);
   const previous = {
