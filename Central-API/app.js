@@ -61,10 +61,7 @@ function createApp() {
       uptimeSeconds: Math.floor(process.uptime()),
       protocol: req.protocol,
       port: config.server.port,
-      subsystems: modulesStatus,
-      cors: {
-        allowedOrigins: config.cors.allowedOrigins
-      }
+      // Public probe intentionally omits module inventory and CORS policy.
     });
   };
 
@@ -81,15 +78,6 @@ function createApp() {
 
   app.get('/health', healthHandler);
   app.get('/api/health', healthHandler);
-
-  // Read-only, on-demand health checks. Do not expose internal paths or errors.
-  app.get('/api/gateway/health', async (req, res, next) => {
-    try {
-      const { inspectRegistry } = require('./modules/health-monitor');
-      const modules = await inspectRegistry(registry);
-      res.json({ gateway: 'Samchuk Hospital Central API Gateway', checkedAt: new Date().toISOString(), modules });
-    } catch (error) { next(error); }
-  });
 
   app.use('/api/gateway/admin', require('./routes/gateway-admin'));
 
