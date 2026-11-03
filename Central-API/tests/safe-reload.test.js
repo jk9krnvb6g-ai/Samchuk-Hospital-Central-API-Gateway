@@ -29,7 +29,7 @@ async function main() {
   assert.equal(registry.getModule('reload-test').version, 1);
   assert.throws(() => registry.rollback('reload-test'), /No rollback/);
 
-  registry.register({ id: 'procurement', prefix: '/api/ProcurementTest', required: true, router: makeCandidate('protected') });
+  assert.ok(registry.getModule('procurement'), 'Configured protected procurement module must exist');
   await assert.rejects(registry.safeReload('procurement', makeCandidate('bad')), /Protected/);
   assert.throws(() => registry.rollback('procurement'), /Protected/);
 
