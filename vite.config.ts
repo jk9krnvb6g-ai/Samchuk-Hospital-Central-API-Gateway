@@ -4,7 +4,12 @@ import path from 'path';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
+  // รองรับการรันทั้ง Relative Path (./) สำหรับ IIS /Gateway/ และ AI Studio Preview
+  // หรือกำหนดผ่าน process.env.VITE_BASE_PATH
+  const basePath = process.env.VITE_BASE_PATH || './';
+
   return {
+    base: basePath,
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
