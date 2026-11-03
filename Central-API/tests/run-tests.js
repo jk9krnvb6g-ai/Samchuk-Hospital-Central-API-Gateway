@@ -146,7 +146,8 @@ async function runTestSuite() {
     assert(resHealth.status === 200 || resHealth.status === 503, 'Health Check ต้องตอบ 200 หรือ 503');
     assert.strictEqual(resHealth.body.gateway, 'Samchuk Hospital Central API Gateway');
     assert.strictEqual(resHealth.body.port, 3002);
-    assert(resHealth.body.subsystems, 'ต้องมีข้อมูล subsystems');
+    assert(!Object.hasOwn(resHealth.body, 'subsystems'), 'Public health must not expose module inventory');
+    assert(!Object.hasOwn(resHealth.body, 'cors'), 'Public health must not expose CORS allowlist');
 
     // ตรวจสอบว่าไม่มี secret / passwords / private keys รั่วไหล
     const jsonStr = JSON.stringify(resHealth.body).toLowerCase();
@@ -154,7 +155,7 @@ async function runTestSuite() {
     assert(!jsonStr.includes('privatekey'), 'ต้องไม่มีคำว่า privatekey ใน health check');
     assert(!jsonStr.includes('passphrase'), 'ต้องไม่มีคำว่า passphrase ใน health check');
 
-    recordTest(6, 'Health Check ทำงานสมบูรณ์และไม่มีการเปิดเผย Secret', true, 'ตอบกลับ /api/health สถานะ UP พร้อมรายการโมดูลโดยไม่มีการเปิดเผยความลับ');
+    recordTest(6, 'Health Check ทำงานสมบูรณ์และไม่มีการเปิดเผย Secret', true, 'ตอบกลับ UP หรือ DEGRADED ตามสถานะจริง โดยไม่เปิดเผยรายการโมดูล');
   } catch (err) {
     recordTest(6, 'Health Check ทำงานสมบูรณ์และไม่มีการเปิดเผย Secret', false, err.message);
   }
@@ -227,7 +228,7 @@ async function runTestSuite() {
     assert.strictEqual(resDynamic.status, 200, 'โมดูลใหม่ต้องตอบ 200');
     assert.strictEqual(resDynamic.body.system, 'Inventory');
 
-    recordTest(10, 'สามารถเพิ่ม Module ใหม่ (เช่น Inventory) ได้โดยไม่เปลี่ยนโครงสร้างหลัก', true, 'ลงทะเบียนและ Mount /api/Inventory สำเร็จในหน่วยความจำทันที');
+    recordTest(10, 'สามารถเพิ่ม Module ใหม่ (เช่น Inventory) ได้โดยไม่เปลี่ยนโครงสร้างหลัก', true, 'ลงทะเบียนและ Mount /api/GatewayTestModule สำเร็จในหน่วยความจำทันที');
   } catch (err) {
     recordTest(10, 'สามารถเพิ่ม Module ใหม่ได้โดยไม่เปลี่ยนโครงสร้างหลัก', false, err.message);
   }
