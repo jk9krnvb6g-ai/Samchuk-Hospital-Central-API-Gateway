@@ -34,7 +34,7 @@ export default function App() {
 
   const handleDownloadZip = () => {
     const link = document.createElement('a');
-    link.href = '/samchuk-central-api-gateway.zip';
+    link.href = `${import.meta.env.BASE_URL}samchuk-central-api-gateway.zip`;
     link.download = 'samchuk-central-api-gateway.zip';
     document.body.appendChild(link);
     link.click();
@@ -42,44 +42,9 @@ export default function App() {
   };
 
   // Modules Record for Module Manager
-  const modulesRecord = healthData?.subsystems || {
-    procurement: {
-      id: 'procurement',
-      name: 'Procurement (ระบบจัดซื้อจัดจ้าง)',
-      prefix: '/api/Procurement',
-      status: 'NOT_CONFIGURED',
-      enabled: true,
-      required: true,
-      hasSourcePath: false
-    },
-    samAtt: {
-      id: 'sam-att',
-      name: 'Sam_Att (ระบบลงเวลาปฏิบัติงาน)',
-      prefix: '/api/Sam_Att',
-      status: 'NOT_CONFIGURED',
-      enabled: true,
-      required: false,
-      hasSourcePath: false
-    },
-    cashCheque: {
-      id: 'cash-cheque',
-      name: 'Cash_Cheque (ระบบเงินสดและเช็ค)',
-      prefix: '/api/Cash_Cheque',
-      status: 'NOT_CONFIGURED',
-      enabled: true,
-      required: false,
-      hasSourcePath: false
-    },
-    inventory: {
-      id: 'inventory',
-      name: 'Inventory (ระบบพัสดุและคลังยา)',
-      prefix: '/api/Inventory',
-      status: 'DISABLED',
-      enabled: false,
-      required: false,
-      hasSourcePath: false
-    }
-  };
+  // No fabricated fallback module states: registry data must come from the server.
+  const modulesRecord = adminOverview?.modules || healthData?.subsystems || {};
+
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
