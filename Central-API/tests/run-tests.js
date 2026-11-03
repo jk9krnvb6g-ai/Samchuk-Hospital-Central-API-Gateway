@@ -84,25 +84,26 @@ async function runTestSuite() {
   }
 
   // -------------------------------------------------------------------------
-  // Test 4: Module ไม่เปิด Listener ของตัวเอง
+  // Test 4: Verify the adapter contract honestly; accepting an Express app does
+  // not prove that imported modules never open their own listener.
   // -------------------------------------------------------------------------
   try {
-    // ทดสอบสร้าง Dummy App ที่เรียก listen() และตรวจสอบว่า Adapter Interface ดักจับได้
-    const fakeServerModule = express();
-    // express() instance มี property listen
-    const valResult = validateSubsystemModule(fakeServerModule, 'test-subsystem');
-    assert(valResult.isValid, 'Adapter ยังยอมรับ router ได้');
+    const isolatedRouter = express.Router();
+    const routerValidation = validateSubsystemModule(isolatedRouter, 'isolated-router');
+    assert(routerValidation.isValid, 'Express Router must be accepted');
+    assert.strictEqual(typeof routerValidation.router.listen, 'undefined', 'Test router must not expose listen()');
 
-    // ตรวจสอบว่าโมดูลจริงที่ลงทะเบียนไม่มี instance Server
-    for (const m of registry.getAll()) {
-      if (m.router && m.router.listen && typeof m.router.listen === 'function') {
-        // แจ้งเตือนความปลอดภัย
-        console.warn(`[WARN] โมดูล ${m.id} มีเมธอด listen`);
-      }
-    }
-    recordTest(4, 'Module แยกขาดและไม่เปิด Listener ของตัวเอง', true, 'Adapter Interface ตรวจสอบและป้องกันการเรียก app.listen() ภายใน Module');
+    // Existing adapter accepts Express apps (and logs a warning). Do not
+    // claim that this is listener prevention; it is a release-review gap.
+    const expressApp = express();
+    const appValidation = validateSubsystemModule(expressApp, 'test-express-app');
+    assert(appValidation.isValid, 'Document current Express App compatibility');
+    assert.strictEqual(typeof appValidation.router.listen, 'function', 'Express App has listen() capability');
+
+    recordTest(4, 'Adapter contract and listener capability accurately reported', true,
+      'Express Router accepted; Express App also accepted with warning. Adapter does NOT prevent modules from opening listeners; production adapters require review.');
   } catch (err) {
-    recordTest(4, 'Module แยกขาดและไม่เปิด Listener ของตัวเอง', false, err.message);
+    recordTest(4, 'Adapter contract and listener capability', false, err.message);
   }
 
   // -------------------------------------------------------------------------
