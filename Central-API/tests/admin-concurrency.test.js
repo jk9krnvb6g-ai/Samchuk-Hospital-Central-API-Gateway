@@ -41,6 +41,9 @@ async function main() {
     const stopped = await stopping;
     assert.equal(stopped.status, 200);
     assert.equal(record.status, 'DISABLED');
+    // The in-process response resolves on res.json(), before the async
+    // admin handler's finally releases its operation lock.
+    await new Promise(resolve => setImmediate(resolve));
     const started = await send('start');
     assert.equal(started.status, 200);
     assert.equal(record.status, 'ACTIVE');
