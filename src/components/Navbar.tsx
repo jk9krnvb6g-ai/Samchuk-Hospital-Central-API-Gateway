@@ -1,6 +1,6 @@
 /**
  * @file src/components/Navbar.tsx
- * Top Navigation Bar with Samchuk Hospital Branding, Live Connection Indicator, and Theme Toggle
+ * Top Navigation Bar with Samchuk Hospital Branding, Live Connection Indicator, Admin Session Status, and Theme Toggle
  */
 
 import React from 'react';
@@ -10,15 +10,17 @@ import {
   RefreshCw,
   Sun,
   Moon,
-  Server,
   Layers,
   Radio,
   FileText,
   Lock,
   Download,
-  Terminal
+  Terminal,
+  UserCheck,
+  LogOut,
+  LogIn
 } from 'lucide-react';
-import { ConnectionStatus, GatewayHealthStatus } from '../types/gateway';
+import { ConnectionStatus, GatewayHealthStatus, AdminUser } from '../types/gateway';
 
 interface NavbarProps {
   activeTab: string;
@@ -32,6 +34,10 @@ interface NavbarProps {
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
   onDownloadZip: () => void;
+  isAuthenticated?: boolean;
+  adminUser?: AdminUser | null;
+  onLogout?: () => void;
+  onOpenLogin?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -44,7 +50,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   onRefresh,
   theme,
   onToggleTheme,
-  onDownloadZip
+  onDownloadZip,
+  isAuthenticated = false,
+  adminUser = null,
+  onLogout,
+  onOpenLogin
 }) => {
   const getStatusColor = () => {
     if (connectionStatus === 'connecting') return 'bg-amber-400';
@@ -125,6 +135,32 @@ export const Navbar: React.FC<NavbarProps> = ({
               </>
             )}
           </div>
+
+          {/* Admin Auth Status */}
+          {isAuthenticated && adminUser ? (
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300">
+              <UserCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span className="font-medium">{adminUser.username}</span>
+              {onLogout && (
+                <button
+                  onClick={onLogout}
+                  title="ออกจากระบบผู้ดูแล"
+                  className="ml-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={onOpenLogin || (() => setActiveTab('modules'))}
+              title="เข้าสู่ระบบผู้ดูแลระบบ (Admin Authentication)"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 hover:bg-amber-100 transition-colors"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>เข้าสู่ระบบ Admin</span>
+            </button>
+          )}
 
           {/* Refresh Button */}
           <button

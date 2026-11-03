@@ -65,10 +65,12 @@ npm run build
   <system.webServer>
     <rewrite>
       <rules>
-        <!-- กฎที่ 1: ส่งต่อคำขอ API ไปยัง Central Gateway พอร์ต 3002 -->
+        <!-- กฎที่ 1: ส่งต่อคำขอ API ไปยัง Central Gateway พอร์ต 3002 (IIS ARR Reverse Proxy) -->
+        <!-- หมายเหตุ: หาก Node.js รันเป็น Local HTTP ด้านหลัง IIS ให้ชี้ไปที่ http://127.0.0.1:3002 -->
+        <!-- หาก Node.js รันเป็น HTTPS Direct Listener ให้ชี้ไปที่ https://127.0.0.1:3002 -->
         <rule name="ReverseProxyToGatewayAPI" stopProcessing="true">
           <match url="^api/(.*)" />
-          <action type="Rewrite" url="https://127.0.0.1:3002/api/{R:1}" />
+          <action type="Rewrite" url="http://127.0.0.1:3002/api/{R:1}" />
         </rule>
 
         <!-- กฎที่ 2: SPA Client-side Routing Fallback -->

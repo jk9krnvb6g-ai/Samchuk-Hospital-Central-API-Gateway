@@ -17,6 +17,12 @@ export interface ModuleRecord {
   loadedAt?: string | null;
   hasSourcePath: boolean;
   error?: string | null;
+  listenerRisk?: boolean;
+}
+
+export interface AdminUser {
+  username: string;
+  role: string;
 }
 
 export interface GatewayHealthResponse {
@@ -27,8 +33,9 @@ export interface GatewayHealthResponse {
   uptimeSeconds: number;
   protocol: string;
   port: number;
-  subsystems: Record<string, ModuleRecord>;
-  cors: {
+  // In Gateway V2, public probe omits subsystems and cors for security; available via authenticated session
+  subsystems?: Record<string, ModuleRecord>;
+  cors?: {
     allowedOrigins: string[];
   };
 }

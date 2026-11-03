@@ -29,7 +29,15 @@ export default function App() {
     isRefreshing,
     customEndpoint,
     updateEndpointUrl,
-    refresh
+    refresh,
+    // Admin Session & Registry
+    isAuthenticated,
+    adminUser,
+    authenticatedModules,
+    isLoadingModules,
+    login,
+    logout,
+    refreshModules
   } = useGatewayHealth();
 
   const handleDownloadZip = () => {
@@ -39,46 +47,6 @@ export default function App() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  };
-
-  // Modules Record for Module Manager
-  const modulesRecord = healthData?.subsystems || {
-    procurement: {
-      id: 'procurement',
-      name: 'Procurement (ระบบจัดซื้อจัดจ้าง)',
-      prefix: '/api/Procurement',
-      status: 'NOT_CONFIGURED',
-      enabled: true,
-      required: true,
-      hasSourcePath: false
-    },
-    samAtt: {
-      id: 'sam-att',
-      name: 'Sam_Att (ระบบลงเวลาปฏิบัติงาน)',
-      prefix: '/api/Sam_Att',
-      status: 'NOT_CONFIGURED',
-      enabled: true,
-      required: false,
-      hasSourcePath: false
-    },
-    cashCheque: {
-      id: 'cash-cheque',
-      name: 'Cash_Cheque (ระบบเงินสดและเช็ค)',
-      prefix: '/api/Cash_Cheque',
-      status: 'NOT_CONFIGURED',
-      enabled: true,
-      required: false,
-      hasSourcePath: false
-    },
-    inventory: {
-      id: 'inventory',
-      name: 'Inventory (ระบบพัสดุและคลังยา)',
-      prefix: '/api/Inventory',
-      status: 'DISABLED',
-      enabled: false,
-      required: false,
-      hasSourcePath: false
-    }
   };
 
   return (
@@ -96,6 +64,10 @@ export default function App() {
         theme={theme}
         onToggleTheme={toggleTheme}
         onDownloadZip={handleDownloadZip}
+        isAuthenticated={isAuthenticated}
+        adminUser={adminUser}
+        onLogout={logout}
+        onOpenLogin={() => setActiveTab('modules')}
       />
 
       {/* 2. Main Content Container */}
@@ -113,13 +85,20 @@ export default function App() {
             customEndpoint={customEndpoint}
             onUpdateEndpoint={updateEndpointUrl}
             onNavigateToModules={() => setActiveTab('modules')}
+            authenticatedModules={authenticatedModules}
+            isAuthenticated={isAuthenticated}
           />
         )}
 
         {activeTab === 'modules' && (
           <ModuleManagerTab
-            modules={modulesRecord}
-            onRefresh={refresh}
+            modules={authenticatedModules}
+            isAuthenticated={isAuthenticated}
+            adminUser={adminUser}
+            isLoadingModules={isLoadingModules}
+            onLogin={login}
+            onLogout={logout}
+            onRefresh={refreshModules}
           />
         )}
 

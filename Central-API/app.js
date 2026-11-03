@@ -51,7 +51,7 @@ function createApp() {
     const modulesStatus = registry.getHealthSummary();
     const isAllRequiredActive = Object.values(modulesStatus)
       .filter(m => m.required)
-      .every(m => m.status === 'ACTIVE' || m.status === 'NOT_CONFIGURED'); // ในระยะเริ่มต้น NOT_CONFIGURED ถือเป็น safe state
+      .every(m => m.status === 'ACTIVE'); // Required modules must be loaded, not merely configured
 
     res.status(isAllRequiredActive ? 200 : 503).json({
       status: isAllRequiredActive ? 'UP' : 'DEGRADED',
@@ -61,10 +61,7 @@ function createApp() {
       uptimeSeconds: Math.floor(process.uptime()),
       protocol: req.protocol,
       port: config.server.port,
-      subsystems: modulesStatus,
-      cors: {
-        allowedOrigins: config.cors.allowedOrigins
-      }
+      // Public probe intentionally omits module inventory and CORS policy.
     });
   };
 
@@ -82,69 +79,8 @@ function createApp() {
   app.get('/health', healthHandler);
   app.get('/api/health', healthHandler);
 
-  // 8. Management API Endpoints สำหรับ V2 Management Console (Read-only)
-  const adminOverviewHandler = (req, res) => {
-    const modulesStatus = registry.getHealthSummary();
-    const isAllRequiredActive = Object.values(modulesStatus)
-      .filter(m => m.required)
-      .every(m => m.status === 'ACTIVE' || m.status === 'NOT_CONFIGURED');
-
-    res.json({
-      success: true,
-      service: 'Samchuk Hospital Central API Gateway V2',
-      hospital: 'โรงพยาบาลสามชุก จ.สุพรรณบุรี',
-      version: '2.0.0',
-      mode: 'READ_ONLY_OBSERVER',
-      mutationsEnabled: false,
-      timestamp: new Date().toISOString(),
-      gateway: {
-        status: isAllRequiredActive ? 'UP' : 'DEGRADED',
-        port: config.server.port,
-        host: config.server.host,
-        protocol: req.protocol,
-        uptimeSeconds: Math.floor(process.uptime()),
-        nodeVersion: process.version,
-        environment: config.env
-      },
-      security: {
-        sslEnabled: config.tls.enabled,
-        targetIp: config.tls.targetIp,
-        corsAllowedOrigins: config.cors.allowedOrigins,
-        rateLimit: config.rateLimit,
-        authPolicy: 'READ_ONLY_PUBLIC_TELEMETRY'
-      },
-      modules: modulesStatus,
-      monitoring: {
-        metricsApiAvailable: false,
-        message: 'Metrics Collector Plugin ยังไม่ได้ติดตั้งบนเซิร์ฟเวอร์ (รอการเปิดใช้งานใน V2.1)'
-      },
-      logs: {
-        streamAvailable: false,
-        logDirectory: config.logging.dir,
-        message: 'Audit Logs ถูกบันทึกลงไฟล์เซิร์ฟเวอร์โดยตรง ไม่เปิดเผยผ่าน Public API'
-      }
-    });
-  };
-
-  app.get('/api/gateway/admin', adminOverviewHandler);
-  app.get('/api/gateway/admin/overview', adminOverviewHandler);
-  app.get('/api/gateway/admin/health', healthHandler);
-
-  // ป้องกันคำสั่ง Mutation (POST/PUT/PATCH/DELETE) บน Admin API
-  app.all('/api/gateway/admin/*', (req, res, next) => {
-    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
-      return res.status(403).json({
-        success: false,
-        error: {
-          code: 'MUTATIONS_DISABLED',
-          message: 'คำสั่งแก้ไขสถานะถูกปิดการใช้งานในระยะแรก (GATEWAY_ADMIN_MUTATIONS_ENABLED=false) เพื่อความปลอดภัยของระบบโรงพยาบาล',
-          correlationId: req.id,
-          timestamp: new Date().toISOString()
-        }
-      });
-    }
-    next();
-  });
+  app.use('/api/gateway/auth', require('./routes/gateway-console-auth'));
+  app.use('/api/gateway/admin', require('./routes/gateway-admin'));
 
   // 8. ติดตั้งและ Mount Subsystem Routers ตามลำดับ
   // /api/Procurement  -> Procurement Router

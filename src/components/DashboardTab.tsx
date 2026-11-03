@@ -23,7 +23,7 @@ import {
   Terminal,
   Database
 } from 'lucide-react';
-import { GatewayHealthResponse, GatewayAdminOverview, ConnectionStatus } from '../types/gateway';
+import { GatewayHealthResponse, GatewayAdminOverview, ConnectionStatus, ModuleRecord } from '../types/gateway';
 import { formatThaiDateTime, formatUptimeThai } from '../utils/formatters';
 
 interface DashboardTabProps {
@@ -38,6 +38,8 @@ interface DashboardTabProps {
   customEndpoint: string;
   onUpdateEndpoint: (url: string) => void;
   onNavigateToModules: () => void;
+  authenticatedModules?: Record<string, ModuleRecord> | null;
+  isAuthenticated?: boolean;
 }
 
 export const DashboardTab: React.FC<DashboardTabProps> = ({
@@ -51,7 +53,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   onRefresh,
   customEndpoint,
   onUpdateEndpoint,
-  onNavigateToModules
+  onNavigateToModules,
+  authenticatedModules = null,
+  isAuthenticated = false
 }) => {
   const [showEndpointConfig, setShowEndpointConfig] = useState<boolean>(false);
   const [inputUrl, setInputUrl] = useState<string>(customEndpoint);
@@ -65,8 +69,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const isConnected = connectionStatus === 'connected' && healthData !== null;
   const healthStatus = healthData?.status || 'UNKNOWN';
 
-  // Subsystems array from real API response
-  const subsystems = healthData?.subsystems ? Object.values(healthData.subsystems) : [];
+  // Subsystems array from authenticated modules or health response
+  const subsystems = authenticatedModules
+    ? Object.values(authenticatedModules)
+    : (healthData?.subsystems ? Object.values(healthData.subsystems) : []);
 
   return (
     <div className="space-y-6">
@@ -351,10 +357,22 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               })}
             </div>
           ) : (
-            <div className="py-8 text-center text-slate-400 dark:text-slate-500 text-xs">
-              {isConnected
-                ? 'ยังไม่มีข้อมูล Subsystems ใน Registry'
-                : 'ไม่สามารถโหลดรายการโมดูลได้เนื่องจาก Gateway ออฟไลน์'}
+            <div className="py-8 text-center text-slate-400 dark:text-slate-500 text-xs space-y-2">
+              <p>
+                {!isConnected
+                  ? 'ไม่สามารถโหลดรายการโมดูลได้เนื่องจาก Gateway ออฟไลน์'
+                  : !isAuthenticated
+                  ? 'รายการโมดูลถูกคุ้มครองตามมาตรฐาน Gateway V2 (ต้องยืนยันตัวตน Admin เพื่อดูรายละเอียด)'
+                  : 'ยังไม่มีข้อมูล Subsystems ใน Registry'}
+              </p>
+              {isConnected && !isAuthenticated && (
+                <button
+                  onClick={onNavigateToModules}
+                  className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-medium transition-colors"
+                >
+                  เข้าสู่ระบบ Admin เพื่อดูโมดูล
+                </button>
+              )}
             </div>
           )}
         </div>
