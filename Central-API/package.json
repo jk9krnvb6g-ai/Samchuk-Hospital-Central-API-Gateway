@@ -9,7 +9,8 @@
     "test": "node tests/run-tests.js",
     "check-port": "node -e \"require('./scripts/check-port-node.js')\"",
     "test:health": "node tests/health-monitor-contract.test.js",
-    "test:scanner-summary": "node tests/scanner-exe-summary-contract.test.js"
+    "test:scanner-summary": "node tests/scanner-exe-summary-contract.test.js",
+    "test:scanner-pipeline": "node tests/scanner-pipeline-contract.test.js"
   },
   "keywords": [
     "api-gateway",
