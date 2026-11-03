@@ -42,14 +42,24 @@ router.post('/modules/:id/:action', async (req, res) => {
   } catch (_) {
     return res.status(503).json({ error: 'AUDIT_UNAVAILABLE' });
   }
+  let module;
   try {
-    const module = action === 'start' ? registry.start(id) : await registry.stop(id);
-    auditAdminAction({ ...event, outcome: 'COMPLETED' });
-    return res.json({ module });
+    module = action === 'start' ? registry.start(id) : await registry.stop(id);
   } catch (_) {
     try { auditAdminAction({ ...event, outcome: 'FAILED' }); } catch (_) {}
     return res.status(409).json({ error: 'MODULE_OPERATION_FAILED' });
   }
+  try {
+    auditAdminAction({ ...event, outcome: 'COMPLETED' });
+  } catch (_) {
+    // Mutation already happened: never report an operation failure or retry it.
+    return res.status(503).json({
+      error: 'AUDIT_COMPLETION_FAILED',
+      operationApplied: true,
+      module
+    });
+  }
+  return res.json({ module });
 });
 
 module.exports = router;
