@@ -211,9 +211,9 @@ async function runTestSuite() {
 
     // ลงทะเบียนโมดูลใหม่เข้าสู่ Registry แบบ Dynamic พร้อม Router ในตัว
     registry.register({
-      id: 'inventory-test',
+      id: 'gateway-test-module',
       name: 'Inventory Test Subsystem',
-      prefix: '/api/Inventory',
+      prefix: '/api/GatewayTestModule',
       enabled: true,
       router: testNewRouter
     });
@@ -221,7 +221,7 @@ async function runTestSuite() {
     // ทดสอบเรียก Endpoint ของโมดูลใหม่ผ่าน In-Process Request
     const resDynamic = await sendInProcessRequest(app, {
       method: 'GET',
-      url: '/api/Inventory/test-route'
+      url: '/api/GatewayTestModule/test-route'
     });
 
     assert.strictEqual(resDynamic.status, 200, 'โมดูลใหม่ต้องตอบ 200');
