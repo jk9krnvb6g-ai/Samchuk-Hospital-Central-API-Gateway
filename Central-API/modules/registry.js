@@ -120,11 +120,13 @@ class ModuleRegistry {
     // Existing requests may finish. Do not forcibly destroy their sockets.
     if (record.inFlight > 0) {
       let timer;
+      let waiter;
       const completed = await Promise.race([
-        new Promise(resolve => record.drainWaiters.push(resolve)),
+        new Promise(resolve => { waiter = resolve; record.drainWaiters.push(resolve); }),
         new Promise(resolve => { timer = setTimeout(() => resolve(false), timeoutMs); })
       ]);
       clearTimeout(timer);
+      record.drainWaiters = record.drainWaiters.filter(resolve => resolve !== waiter);
       if (completed === false && record.inFlight > 0) {
         // Remain in DRAINING to avoid falsely claiming shutdown.
         throw new Error('Module drain timed out; module remains DRAINING');
