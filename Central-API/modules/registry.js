@@ -24,6 +24,7 @@ class ModuleRegistry {
     this.modules = new Map();
     this.isInitialized = false;
     this.isMounted = false;
+    this.stagedCandidates = new Map();
   }
 
   init() {
@@ -158,6 +159,24 @@ class ModuleRegistry {
     return this.publicRecord(record);
   }
 
+  stageCandidate(id, candidate) {
+    const record = this.modules.get(id);
+    if (!record) throw new Error('Unknown module');
+    if (record.required || id === 'procurement') throw new Error('Protected module');
+    if (record.operationBusy || record.status !== STATES.ACTIVE) throw new Error('Module not ready for staging');
+    const checked = validateSubsystemModule(candidate, id);
+    if (!checked.isValid || typeof checked.healthCheck !== 'function') throw new Error('Invalid staged candidate');
+    this.stagedCandidates.set(id, candidate);
+  }
+
+  async activateStaged(id) {
+    const candidate = this.stagedCandidates.get(id);
+    if (!candidate) throw new Error('No staged candidate');
+    const result = await this.safeReload(id, candidate);
+    this.stagedCandidates.delete(id);
+    return result;
+  }
+
   async safeReload(id, candidate, { timeoutMs = 1500 } = {}) {
     const record = this.modules.get(id);
     if (!record) throw new Error('Unknown module');
@@ -262,7 +281,8 @@ class ModuleRegistry {
       hasSourcePath: Boolean(record.externalPath),
       inFlight: record.inFlight,
       version: record.version,
-      rollbackAvailable: Boolean(record.previousVersion)
+      rollbackAvailable: Boolean(record.previousVersion),
+      stagedAvailable: this.stagedCandidates.has(record.id)
     };
   }
 
