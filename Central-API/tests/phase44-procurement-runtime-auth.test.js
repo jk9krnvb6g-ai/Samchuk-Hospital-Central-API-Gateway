@@ -8,6 +8,7 @@ if (!target || !fs.existsSync(target)) { console.error('Usage: node tests/phase4
 const worker = String.raw`
 'use strict';
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const Module = require('node:module');
 const net = require('node:net');
 const http = require('node:http');
@@ -27,12 +28,25 @@ Module._load = function(name, parent, isMain) {
 };
 const router = require(target);
 assert.equal(typeof router, 'function');
+const sign = payload => {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signature = crypto.createHmac('sha256', process.env.PROCUREMENT_TEST_JWT_SECRET)
+    .update(header + '.' + body).digest('base64url');
+  return header + '.' + body + '.' + signature;
+};
+const user = { id: 'test-user', role: 'USER', exp: Date.now() + 60000 };
+const expired = sign({ ...user, exp: Date.now() - 60000 });
+const regular = sign(user);
 const cases = [
   { label: 'missing token /data', method: 'GET', url: '/data', status: 401 },
   { label: 'malformed token /data', method: 'GET', url: '/data', token: 'not-a-jwt', status: 401 },
   { label: 'missing token /users', method: 'GET', url: '/users', status: 401 },
   { label: 'missing token /procurements', method: 'POST', url: '/procurements', status: 401 },
-  { label: 'missing token /category', method: 'POST', url: '/category', status: 401 }
+  { label: 'missing token /category', method: 'POST', url: '/category', status: 401 },
+  { label: 'expired signed token /data', method: 'GET', url: '/data', token: expired, status: 401 },
+  { label: 'regular user denied /users', method: 'GET', url: '/users', token: regular, status: 403 },
+  { label: 'regular user denied /category', method: 'POST', url: '/category', token: regular, status: 403 }
 ];
 async function request(test) {
   const { EventEmitter } = require('node:events');
