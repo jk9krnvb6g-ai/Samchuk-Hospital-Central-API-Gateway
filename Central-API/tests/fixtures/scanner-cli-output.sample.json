@@ -1,0 +1,43 @@
+{
+  "success": true,
+  "readerVersion": "ScannerSyncCli v1.0.4",
+  "machineNo": 1,
+  "ipAddress": "192.168.111.163",
+  "port": 5005,
+  "totalRead": 2,
+  "totalNew": 2,
+  "duplicates": 0,
+  "affectedDates": [
+    "2026-10-14"
+  ],
+  "machines": [
+    {
+      "machineNo": 1,
+      "name": "เครื่องสแกน OPD (ชั้น 1)",
+      "ip": "192.168.111.163",
+      "readCount": 2,
+      "newCount": 2,
+      "duplicates": 0,
+      "success": true,
+      "error": null
+    }
+  ],
+  "scans": [
+    {
+      "machineNo": 1,
+      "enrollNumber": 1042,
+      "scanDateTime": "2026-10-14 07:48:22",
+      "verifyMode": 1,
+      "inOutMode": 0,
+      "workCode": 0
+    },
+    {
+      "machineNo": 1,
+      "enrollNumber": 1042,
+      "scanDateTime": "2026-10-14 16:32:05",
+      "verifyMode": 1,
+      "inOutMode": 1,
+      "workCode": 0
+    }
+  ]
+}
