@@ -43,16 +43,13 @@ export function useGatewayHealth() {
         setConnectionStatus('connected');
         setErrorMessage(null);
 
-        // 2. Fetch Admin Overview asynchronously if health succeeded
-        try {
-          const adminResult = await gatewayApiClient.fetchAdminOverview(3000);
-          if (isMountedRef.current && adminResult.success && adminResult.data) {
-            setAdminOverview(adminResult.data);
-          }
-        } catch {
-          // Admin Overview is optional if running minimal gateway
-        }
+        // Admin API is protected by server-side Bearer authentication.
+        // Do not send anonymous polling requests or embed admin tokens in browsers.
+        setAdminOverview(null);
+
       } else {
+        setHealthData(null);
+        setAdminOverview(null);
         setConnectionStatus('offline');
         setErrorMessage(healthResult.errorMessage || 'ไม่สามารถติดต่อเซิร์ฟเวอร์ Gateway ได้');
       }
