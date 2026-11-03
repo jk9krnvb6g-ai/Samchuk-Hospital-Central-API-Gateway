@@ -30,7 +30,7 @@ router.get('/modules/:id/health', async (req, res) => {
 
 router.post('/modules/:id/:action', async (req, res) => {
   const { id, action } = req.params;
-  if (!['start', 'stop'].includes(action)) return res.status(404).json({ error: 'UNKNOWN_ACTION' });
+  if (!['start', 'stop', 'reload', 'rollback'].includes(action)) return res.status(404).json({ error: 'UNKNOWN_ACTION' });
   const record = registry.getModule(id);
   if (!record) return res.status(404).json({ error: 'MODULE_NOT_FOUND' });
   if (record.required || id === 'procurement') return res.status(403).json({ error: 'PROTECTED_MODULE' });
@@ -55,7 +55,10 @@ async function executeModuleOperation(req, res, { id, action }) {
   }
   let module;
   try {
-    module = action === 'start' ? registry.start(id) : await registry.stop(id);
+    if (action === 'start') module = registry.start(id);
+    else if (action === 'stop') module = await registry.stop(id);
+    else if (action === 'reload') module = await registry.activateStaged(id);
+    else module = registry.rollback(id);
   } catch (_) {
     try { auditAdminAction({ ...event, outcome: 'FAILED' }); } catch (_) {}
     return res.status(409).json({ error: 'MODULE_OPERATION_FAILED' });
