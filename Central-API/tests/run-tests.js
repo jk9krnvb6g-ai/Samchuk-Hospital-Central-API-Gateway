@@ -84,25 +84,26 @@ async function runTestSuite() {
   }
 
   // -------------------------------------------------------------------------
-  // Test 4: Module ไม่เปิด Listener ของตัวเอง
+  // Test 4: Verify the adapter contract honestly; accepting an Express app does
+  // not prove that imported modules never open their own listener.
   // -------------------------------------------------------------------------
   try {
-    // ทดสอบสร้าง Dummy App ที่เรียก listen() และตรวจสอบว่า Adapter Interface ดักจับได้
-    const fakeServerModule = express();
-    // express() instance มี property listen
-    const valResult = validateSubsystemModule(fakeServerModule, 'test-subsystem');
-    assert(valResult.isValid, 'Adapter ยังยอมรับ router ได้');
+    const isolatedRouter = express.Router();
+    const routerValidation = validateSubsystemModule(isolatedRouter, 'isolated-router');
+    assert(routerValidation.isValid, 'Express Router must be accepted');
+    assert.strictEqual(typeof routerValidation.router.listen, 'undefined', 'Test router must not expose listen()');
 
-    // ตรวจสอบว่าโมดูลจริงที่ลงทะเบียนไม่มี instance Server
-    for (const m of registry.getAll()) {
-      if (m.router && m.router.listen && typeof m.router.listen === 'function') {
-        // แจ้งเตือนความปลอดภัย
-        console.warn(`[WARN] โมดูล ${m.id} มีเมธอด listen`);
-      }
-    }
-    recordTest(4, 'Module แยกขาดและไม่เปิด Listener ของตัวเอง', true, 'Adapter Interface ตรวจสอบและป้องกันการเรียก app.listen() ภายใน Module');
+    // Existing adapter accepts Express apps (and logs a warning). Do not
+    // claim that this is listener prevention; it is a release-review gap.
+    const expressApp = express();
+    const appValidation = validateSubsystemModule(expressApp, 'test-express-app');
+    assert(appValidation.isValid, 'Document current Express App compatibility');
+    assert.strictEqual(typeof appValidation.router.listen, 'function', 'Express App has listen() capability');
+
+    recordTest(4, 'Adapter contract and listener capability accurately reported', true,
+      'Express Router accepted; Express App also accepted with warning. Adapter does NOT prevent modules from opening listeners; production adapters require review.');
   } catch (err) {
-    recordTest(4, 'Module แยกขาดและไม่เปิด Listener ของตัวเอง', false, err.message);
+    recordTest(4, 'Adapter contract and listener capability', false, err.message);
   }
 
   // -------------------------------------------------------------------------
@@ -146,7 +147,8 @@ async function runTestSuite() {
     assert(resHealth.status === 200 || resHealth.status === 503, 'Health Check ต้องตอบ 200 หรือ 503');
     assert.strictEqual(resHealth.body.gateway, 'Samchuk Hospital Central API Gateway');
     assert.strictEqual(resHealth.body.port, 3002);
-    assert(resHealth.body.subsystems, 'ต้องมีข้อมูล subsystems');
+    assert(!Object.hasOwn(resHealth.body, 'subsystems'), 'Public health must not expose module inventory');
+    assert(!Object.hasOwn(resHealth.body, 'cors'), 'Public health must not expose CORS allowlist');
 
     // ตรวจสอบว่าไม่มี secret / passwords / private keys รั่วไหล
     const jsonStr = JSON.stringify(resHealth.body).toLowerCase();
@@ -154,7 +156,7 @@ async function runTestSuite() {
     assert(!jsonStr.includes('privatekey'), 'ต้องไม่มีคำว่า privatekey ใน health check');
     assert(!jsonStr.includes('passphrase'), 'ต้องไม่มีคำว่า passphrase ใน health check');
 
-    recordTest(6, 'Health Check ทำงานสมบูรณ์และไม่มีการเปิดเผย Secret', true, 'ตอบกลับ /api/health สถานะ UP พร้อมรายการโมดูลโดยไม่มีการเปิดเผยความลับ');
+    recordTest(6, 'Health Check ทำงานสมบูรณ์และไม่มีการเปิดเผย Secret', true, 'ตอบกลับ UP หรือ DEGRADED ตามสถานะจริง โดยไม่เปิดเผยรายการโมดูล');
   } catch (err) {
     recordTest(6, 'Health Check ทำงานสมบูรณ์และไม่มีการเปิดเผย Secret', false, err.message);
   }
@@ -211,9 +213,9 @@ async function runTestSuite() {
 
     // ลงทะเบียนโมดูลใหม่เข้าสู่ Registry แบบ Dynamic พร้อม Router ในตัว
     registry.register({
-      id: 'inventory-test',
+      id: 'gateway-test-module',
       name: 'Inventory Test Subsystem',
-      prefix: '/api/Inventory',
+      prefix: '/api/GatewayTestModule',
       enabled: true,
       router: testNewRouter
     });
@@ -221,13 +223,13 @@ async function runTestSuite() {
     // ทดสอบเรียก Endpoint ของโมดูลใหม่ผ่าน In-Process Request
     const resDynamic = await sendInProcessRequest(app, {
       method: 'GET',
-      url: '/api/Inventory/test-route'
+      url: '/api/GatewayTestModule/test-route'
     });
 
     assert.strictEqual(resDynamic.status, 200, 'โมดูลใหม่ต้องตอบ 200');
     assert.strictEqual(resDynamic.body.system, 'Inventory');
 
-    recordTest(10, 'สามารถเพิ่ม Module ใหม่ (เช่น Inventory) ได้โดยไม่เปลี่ยนโครงสร้างหลัก', true, 'ลงทะเบียนและ Mount /api/Inventory สำเร็จในหน่วยความจำทันที');
+    recordTest(10, 'สามารถเพิ่ม Module ใหม่ (เช่น Inventory) ได้โดยไม่เปลี่ยนโครงสร้างหลัก', true, 'ลงทะเบียนและ Mount /api/GatewayTestModule สำเร็จในหน่วยความจำทันที');
   } catch (err) {
     recordTest(10, 'สามารถเพิ่ม Module ใหม่ได้โดยไม่เปลี่ยนโครงสร้างหลัก', false, err.message);
   }
