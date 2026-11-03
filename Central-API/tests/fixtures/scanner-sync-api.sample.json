@@ -1,0 +1,42 @@
+{
+  "success": true,
+  "readerVersion": "ScannerSyncCli v1.0.4",
+  "exitCode": 0,
+  "durationMs": 1845,
+  "totalRead": 128,
+  "totalNew": 12,
+  "duplicates": 116,
+  "unmapped": 0,
+  "affectedDates": [
+    "2026-10-14"
+  ],
+  "machines": [
+    {
+      "machineNo": 1,
+      "name": "เครื่องสแกน OPD (ชั้น 1)",
+      "ip": "192.168.111.163",
+      "readCount": 78,
+      "newCount": 8,
+      "duplicates": 70,
+      "success": true,
+      "error": null
+    },
+    {
+      "machineNo": 2,
+      "name": "เครื่องสแกน IPD (ชั้น 2)",
+      "ip": "192.168.111.164",
+      "readCount": 50,
+      "newCount": 4,
+      "duplicates": 46,
+      "success": true,
+      "error": null
+    }
+  ],
+  "autoCalculated": true,
+  "calculationStatus": "SUCCESS",
+  "calculatedDates": [
+    "2026-10-14"
+  ],
+  "failedDates": [],
+  "message": "ซิงค์เครื่องสแกน: อ่านทั้งหมด 128 รายการ, รายการใหม่ +12, ซ้ำ 116 รายการ"
+}
